@@ -6,3 +6,4 @@ plotly
 seaborn
 fastf1
 scikit-learn
+dotenv
