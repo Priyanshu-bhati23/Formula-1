@@ -9,12 +9,23 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.impute import SimpleImputer
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
+import platform
 
 QUALI_WEIGHT = 2.0
 
 def run_prediction(cache_path="Predictions/cache_monaco"):
-    print(f"✅ Enabling cache at: {cache_path}")
-    fastf1.Cache.enable_cache(cache_path)
+    
+
+    # Use local cache if exists, else fallback to /tmp (for Streamlit Cloud)
+    if os.path.exists(cache_path):
+        fastf1.Cache.enable_cache(cache_path)
+        print(f"✅ Using local cache: {cache_path}")
+    else:
+        cloud_cache = "/tmp/fastf1_cache"
+        os.makedirs(cloud_cache, exist_ok=True)
+        fastf1.Cache.enable_cache(cloud_cache)
+        print(f"☁️ Using temporary cloud cache: {cloud_cache}")
+    
 
     # ----------------------------
     # Collect race and qualifying data for 2022–2024 Monaco GPs

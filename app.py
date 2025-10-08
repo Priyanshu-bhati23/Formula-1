@@ -7,6 +7,12 @@ import pages.team_analysis_page as team_analysis_page
 import pages.driver_vs_teammate as driver_vs_teammate
 import pages.driver_analysis_page as driver_analysis_page
 import pages.season_analysis_page as season_analysis_page
+import fastf1
+
+# Enable FastF1 cache for Streamlit Cloud
+cache_dir = "/tmp/fastf1_cache"  # writable folder on 
+os.makedirs(cache_dir, exist_ok=True)
+fastf1.Cache.enable_cache(cache_dir)
 
 # -------------------------------
 # Streamlit Page Configuration
@@ -129,8 +135,9 @@ if page == "Race Prediction":
                 st.warning(f"No `run_prediction()` function found in `{race_name}_gp.py`")
 
         except Exception as e:
-            st.error(f"🚨 Error while running prediction: {e}")
-            st.code(f"Details: {e}", language='python')
+            st.error(f"🚨 Error while running  ")
+            st.exception(e)
+            st.info("Tip: This might happen if FastF1 cannot fetch or cache data for this race.")
             
     elif not available_races:
         pass 
