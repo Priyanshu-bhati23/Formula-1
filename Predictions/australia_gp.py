@@ -8,9 +8,19 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.impute import SimpleImputer
 import matplotlib.pyplot as plt
-from dotenv import load_dotenv
+
+# ✅ Import Streamlit secrets safely (for API key)
+try:
+    import streamlit as st
+    API_KEY = st.secrets.get("WEATHER_API_KEY", "")
+except Exception:
+    # fallback if running locally
+    from dotenv import load_dotenv
+    load_dotenv()
+    API_KEY = os.getenv("WeatherAPI", "")
 
 QUALI_WEIGHT = 2.0
+
 
 def run_prediction(cache_path="Predictions/cache_australia"):
     print(f"✅ Enabling cache at: {cache_path}")
@@ -77,18 +87,26 @@ def run_prediction(cache_path="Predictions/cache_australia"):
     historical["TeamPerformanceScore"] = historical["Team"].map(team_perf)
 
     # ----------------------------
-    # Weather data for Australia GP
-    load_dotenv()
-    API_KEY = os.getenv("WeatherAPI", "")
-    params = {"key": API_KEY, "q": "-37.8497,144.968", "days": 1, "aqi": "no", "alerts": "no"}
-    resp = requests.get("http://api.weatherapi.com/v1/forecast.json", params=params)
-    weather = resp.json()
-    forecast = weather.get("forecast", {}).get("forecastday", [])
-    rain_probability, temperature = 0, 22
-    if forecast:
-        hour = forecast[0].get("hour", [])[0]
-        rain_probability = hour.get("chance_of_rain", 0) / 100
-        temperature = hour.get("temp_c", 22)
+    # Weather data (Melbourne)
+    rain_probability, temperature = 0, 22  # defaults
+    try:
+        if not API_KEY:
+            raise ValueError("❌ WeatherAPI key missing!")
+
+        params = {"key": API_KEY, "q": "-37.8497,144.968", "days": 1, "aqi": "no", "alerts": "no"}
+        resp = requests.get("https://api.weatherapi.com/v1/forecast.json", params=params, timeout=10)
+
+        if resp.status_code == 200:
+            weather = resp.json()
+            forecast = weather.get("forecast", {}).get("forecastday", [])
+            if forecast:
+                hour = forecast[0].get("hour", [])[0]
+                rain_probability = hour.get("chance_of_rain", 0) / 100
+                temperature = hour.get("temp_c", 22)
+        else:
+            print(f"⚠️ Weather API error: {resp.status_code}")
+    except Exception as e:
+        print(f"⚠️ Weather data fetch failed: {e}")
 
     historical.loc[:, "RainProbability"] = rain_probability
     historical.loc[:, "Temperature"] = temperature
@@ -109,10 +127,10 @@ def run_prediction(cache_path="Predictions/cache_australia"):
     X_train, X_test, y_train, y_test = train_test_split(X_imputed, y, test_size=0.2, random_state=42)
     model = GradientBoostingRegressor(n_estimators=300, learning_rate=0.05, max_depth=4, random_state=42)
     model.fit(X_train, y_train)
-    print(f"MAE on validation: {mean_absolute_error(y_test, model.predict(X_test)):.2f}")
+    print(f"📊 MAE on validation: {mean_absolute_error(y_test, model.predict(X_test)):.2f}")
 
     # ----------------------------
-    # Predict Australian GP (2025)
+    # Predict Australian GP 2025
     qual_2025 = pd.DataFrame({
         "Driver": [
             "NOR", "PIA", "VER", "RUS", "TSU", "ALB", "LEC", "HAM", "GAS", "SAI",

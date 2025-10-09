@@ -17,7 +17,7 @@ def run_prediction(cache_path="Predictions/cache_china"):
     fastf1.Cache.enable_cache(cache_path)
 
     # ----------------------------
-    # Collect race and qualifying data for 2022–2024 Chinese GPs
+    # Load cached data for 2022–2024 Chinese GPs
     data_years = []
     for yr in [2022, 2023, 2024]:
         try:
@@ -43,10 +43,10 @@ def run_prediction(cache_path="Predictions/cache_china"):
             merged["Season"] = yr
             data_years.append(merged)
         except Exception as e:
-            print(f"Error loading {yr} Chinese GP: {e}")
+            print(f"⚠️ Error loading {yr} Chinese GP from cache: {e}")
 
     if not data_years:
-        print("❌ No historical data found.")
+        print("❌ No cached data found for Chinese GP.")
         return None
 
     historical = pd.concat(data_years, ignore_index=True).copy()
@@ -64,37 +64,45 @@ def run_prediction(cache_path="Predictions/cache_china"):
         "Ferrari": 94, "Haas": 20, "Aston Martin": 14, "Kick Sauber": 6,
         "Racing Bulls": 8, "Alpine": 7
     }
+
     max_points = max(team_points.values())
     team_perf = {t: pts / max_points for t, pts in team_points.items()}
 
     driver_team = {
-        "VER":"Red Bull","NOR":"McLaren","PIA":"McLaren","LEC":"Ferrari","RUS":"Mercedes",
-        "HAM":"Mercedes","GAS":"Alpine","ALO":"Aston Martin","TSU":"Racing Bulls",
-        "SAI":"Ferrari","HUL":"Kick Sauber","OCO":"Alpine","STR":"Aston Martin"
+        "VER": "Red Bull", "NOR": "McLaren", "PIA": "McLaren", "LEC": "Ferrari", "RUS": "Mercedes",
+        "HAM": "Mercedes", "GAS": "Alpine", "ALO": "Aston Martin", "TSU": "Racing Bulls",
+        "SAI": "Ferrari", "HUL": "Kick Sauber", "OCO": "Alpine", "STR": "Aston Martin"
     }
 
     historical["Team"] = historical["Driver"].map(driver_team)
     historical["CleanAirRacePace (s)"] = historical["Driver"].map(clean_air_race_pace)
     historical["TeamPerformanceScore"] = historical["Team"].map(team_perf)
-    historical = historical.dropna(subset=["RacePosition","QualifyingTime (s)"])
+    historical = historical.dropna(subset=["RacePosition", "QualifyingTime (s)"])
 
     # ----------------------------
-    # Weather data for Shanghai, China
+    # Weather data for Shanghai (China GP)
     load_dotenv()
     API_KEY = os.getenv("WeatherAPI", "")
-    params = {
-        "key": API_KEY,
-        "q": "31.3389,121.2217",
-        "days": 1, "aqi": "no", "alerts": "no"
-    }
-    resp = requests.get("http://api.weatherapi.com/v1/forecast.json", params=params)
-    weather = resp.json()
-    forecast = weather.get("forecast", {}).get("forecastday", [])
-    rain_probability, temperature = 0, 22
-    if forecast:
-        hour = forecast[0].get("hour", [])[0]
-        rain_probability = hour.get("chance_of_rain", 0)/100
-        temperature = hour.get("temp_c", 22)
+    rain_probability, temperature = 0, 22  # defaults
+
+    if API_KEY:
+        try:
+            params = {
+                "key": API_KEY,
+                "q": "31.3389,121.2217",
+                "days": 1,
+                "aqi": "no",
+                "alerts": "no"
+            }
+            resp = requests.get("http://api.weatherapi.com/v1/forecast.json", params=params)
+            weather = resp.json()
+            forecast = weather.get("forecast", {}).get("forecastday", [])
+            if forecast:
+                hour = forecast[0].get("hour", [])[0]
+                rain_probability = hour.get("chance_of_rain", 0) / 100
+                temperature = hour.get("temp_c", 22)
+        except Exception as e:
+            print(f"⚠️ Weather API error: {e}")
 
     historical["RainProbability"] = rain_probability
     historical["Temperature"] = temperature
@@ -115,10 +123,10 @@ def run_prediction(cache_path="Predictions/cache_china"):
     X_train, X_test, y_train, y_test = train_test_split(X_imputed, y, test_size=0.2, random_state=42)
     model = GradientBoostingRegressor(n_estimators=300, learning_rate=0.05, max_depth=4, random_state=42)
     model.fit(X_train, y_train)
-    print(f"MAE on validation: {mean_absolute_error(y_test, model.predict(X_test)):.2f}")
+    print(f"📊 MAE on validation: {mean_absolute_error(y_test, model.predict(X_test)):.2f}")
 
     # ----------------------------
-    # Hardcoded driver & qualifying times for Chinese GP 2025
+    # Predicted 2025 Chinese GP
     qual_2025 = pd.DataFrame({
         "Driver": [
             "PIA", "RUS", "NOR", "VER", "HAM", "LEC", "HAD", "ANT", "TSU", "ALB",
@@ -132,26 +140,20 @@ def run_prediction(cache_path="Predictions/cache_china"):
         ]
     })
 
-    # Load actual race results for Chinese GP 2025
     try:
-        race_china = fastf1.get_session(2025, 5, "R")
-        race_china.load()
-        race_results = race_china.results[["Abbreviation", "Position"]].rename(
+        race_2025 = fastf1.get_session(2025, 5, "R")
+        race_2025.load()
+        race_results = race_2025.results[["Abbreviation", "Position"]].rename(
             columns={"Abbreviation": "Driver", "Position": "RacePosition"}
         )
         qual_2025 = pd.merge(qual_2025, race_results, on="Driver", how="left")
     except Exception as e:
-        print(f"Error loading Chinese GP 2025 results: {e}")
+        print(f"⚠️ Could not load 2025 race data: {e}")
         qual_2025["RacePosition"] = np.nan
 
     qual_2025["Team"] = qual_2025["Driver"].map(driver_team)
     qual_2025["TeamPerformanceScore"] = qual_2025["Team"].map(team_perf)
     qual_2025["CleanAirRacePace (s)"] = qual_2025["Driver"].map(clean_air_race_pace)
-
-    for feature in ["TeamPerformanceScore", "CleanAirRacePace (s)"]:
-        if qual_2025[feature].isnull().any():
-            qual_2025[feature].fillna(historical[feature].median(), inplace=True)
-
     qual_2025["RainProbability"] = rain_probability
     qual_2025["Temperature"] = temperature
 
@@ -159,21 +161,20 @@ def run_prediction(cache_path="Predictions/cache_china"):
     X_pred["QualifyingTime (s)"] *= QUALI_WEIGHT
     X_pred = imputer.transform(X_pred)
     qual_2025["PredictedPosition"] = model.predict(X_pred)
-
     qual_2025 = qual_2025.sort_values("PredictedPosition")
 
     print("\n🏁 Predicted 2025 Chinese GP Results 🏁")
-    print(qual_2025[["Driver","PredictedPosition","RacePosition"]])
+    print(qual_2025[["Driver", "PredictedPosition", "RacePosition"]])
 
     print("\n🏆 Predicted Podium 🏆")
     print(f"🥇 P1: {qual_2025.iloc[0]['Driver']}")
     print(f"🥈 P2: {qual_2025.iloc[1]['Driver']}")
     print(f"🥉 P3: {qual_2025.iloc[2]['Driver']}")
 
-    plt.figure(figsize=(8,5))
+    plt.figure(figsize=(8, 5))
     plt.barh(features, model.feature_importances_, color="salmon")
     plt.title("Feature Importance (Chinese GP Race Prediction)")
     plt.tight_layout()
     plt.show()
 
-    return qual_2025[["Driver","PredictedPosition","RacePosition"]]
+    return qual_2025[["Driver", "PredictedPosition", "RacePosition"]]
