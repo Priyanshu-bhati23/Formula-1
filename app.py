@@ -9,14 +9,14 @@ import fastf1
 # Import analysis pages directly from 'pages' subdirectory.
 try:
     # Attempt to import all pages
-    import pages.team_analysis_page as team_analysis_page 
+    import pages.team_analysis as team_analysis 
     # Removed: import pages.driver_vs_teammate as driver_vs_teammate
     import pages.driver_analysis_page as driver_analysis_page
     import pages.season_analysis_page as season_analysis_page
     analysis_pages_loaded = True
 except ImportError:
     st.error("🚨 Module Error: Could not import analysis pages from the 'pages' directory. Ensure the folder exists and files are present.")
-    team_analysis_page = None
+    team_analysis = None
     driver_analysis_page = None
     season_analysis_page = None
     analysis_pages_loaded = False
@@ -195,9 +195,9 @@ if page == "Race Prediction":
 # --- ANALYSIS PAGES DISPATCH ---
 # Enhanced check to ensure modules loaded successfully
 elif page == "Team Analysis":
-    if team_analysis_page and analysis_pages_loaded:
+    if team_analysis and analysis_pages_loaded:
         try:
-            team_analysis_page.run_team_analysis_dashboard(load_data, DATA_FILE)
+            team_analysis.run_team_analysis_dashboard(load_data, DATA_FILE)
         except TypeError as e:
             st.error(f"🚨 TypeError in Team Analysis dispatch: Check if 'run_team_analysis_dashboard' function signature in 'pages/team_analysis_page.py' matches expected arguments: (load_data_func, data_file). Original Error: {e}")
             st.exception(e)
