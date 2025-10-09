@@ -29,7 +29,7 @@ def run_comparison_dashboard(load_data_func, data_file):
     df_merged = pd.merge(df, teammate_mapping, on='Driver', how='left', suffixes=('', '_Teammate'))
     
     # Calculate the average position for each driver/teammate pair
-    avg_position = df_merged.groupby(['Driver', 'Teammate'])['Position'].mean().reset_index()
+    avg_position = df_merged.groupby(['driver', 'Teammate'])['Position'].mean().reset_index()
     avg_position.rename(columns={'Position': 'Avg_Position'}, inplace=True)
     
     # Calculate the average position for the teammate
