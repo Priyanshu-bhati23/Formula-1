@@ -8,51 +8,53 @@ import warnings
 
 def run_team_analysis_dashboard(load_data_func, data_file):
     """
-    Multi-page Streamlit Team Analysis Dashboard.
-
-    Args:
-        load_data_func: Function to load dataset (e.g., load_data)
-        data_file: Path to the CSV dataset
+    Displays the Team Performance Dashboard (Interactive Version)
     """
     st.title("🏎️ Formula 1 Team Performance Dashboard")
-    st.caption("Explore F1 team stats, trends, and performance consistency from 2018–2024")
     st.markdown("---")
+    st.markdown("Explore F1 team stats, trends, and performance consistency from 2018–2024")
 
-    # --- LOAD DATA ---
     try:
         df = load_data_func(data_file)
-    except FileNotFoundError as e:
-        st.error(f"🚨 {e}. Please ensure the dataset is in your project root.")
+    except Exception as e:
+        st.error(f"❌ Failed to load data for analysis: {e}")
         return
 
-    # --- SIDEBAR FILTERS ---
+    # --- Normalize column names ---
+    df.columns = df.columns.str.strip().str.lower()
+
+    # --- Sidebar Filters ---
     st.sidebar.header("🔍 Filters")
+    all_seasons = sorted(df['season'].unique())
+    all_teams = sorted(df['teamname'].unique())
+
+    # Season selector
     selected_season = st.sidebar.selectbox(
         "Select Season:",
-        options=sorted(df["season"].unique()),
-        index=len(df["season"].unique()) - 1
+        options=all_seasons,
+        index=len(all_seasons) - 1
     )
 
-    available_teams = sorted(df["TeamName"].unique())
+    # Team selector
     selected_teams = st.sidebar.multiselect(
         "Select Teams to Compare:",
-        options=available_teams,
-        default=available_teams[:5]
+        options=all_teams,
+        default=all_teams[:5]
     )
 
-    df_season = df[df["season"] == selected_season]
-    df_filtered = df_season[df_season["TeamName"].isin(selected_teams)]
+    # Apply filters
+    df_filtered = df[df['season'] == selected_season]
+    if selected_teams:
+        df_filtered = df_filtered[df_filtered['teamname'].isin(selected_teams)]
 
-    # ===========================
-    # 1️⃣ Team Wins Distribution
-    # ===========================
+    # --- Team Wins ---
     st.subheader("🏆 Team Wins Distribution")
-    st.markdown("**Visualize how wins are distributed among top teams in the selected season.**")
+    st.markdown("Visualize how wins are distributed among top teams in the selected season.")
 
+    team_wins = df_filtered.groupby("teamname")["winner"].sum().sort_values(ascending=False)
     col1, col2 = st.columns([1.2, 1])
 
     with col1:
-        team_wins = df_filtered.groupby("TeamName")["Winner"].sum().sort_values(ascending=False)
         if not team_wins.empty:
             fig1, ax1 = plt.subplots(figsize=(7, 7))
             ax1.pie(
@@ -67,28 +69,25 @@ def run_team_analysis_dashboard(load_data_func, data_file):
             plt.close(fig1)
         else:
             st.info("No win data available for this filter.")
-    
+
     with col2:
         st.metric("Most Winning Team", team_wins.idxmax() if not team_wins.empty else "N/A")
         st.metric("Total Wins Counted", int(team_wins.sum()) if not team_wins.empty else 0)
 
     st.markdown("---")
 
-    # ===========================
-    # 2️⃣ Average Points per Team
-    # ===========================
+    # --- Average Points per Team ---
     st.subheader("⭐ Average Points per Race (Selected Season)")
-    st.markdown("**Compare the average points per race across selected teams.**")
+    st.markdown("Compare the average points per race across selected teams.")
 
-    team_points = df_filtered.groupby("TeamName")["Points"].mean().sort_values(ascending=False)
+    team_points = df_filtered.groupby("teamname")["points"].mean().sort_values(ascending=False)
 
     if not team_points.empty:
         fig2, ax2 = plt.subplots(figsize=(10, 6))
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             sns.barplot(x=team_points.values, y=team_points.index, palette="Blues_r", ax=ax2)
-
-        ax2.set_xlabel("Avg Points per Race", fontsize=12)
+        ax2.set_xlabel("Avg Points per Race")
         ax2.set_ylabel("Team")
         ax2.grid(axis='x', linestyle='--', alpha=0.3)
         st.pyplot(fig2)
@@ -98,11 +97,9 @@ def run_team_analysis_dashboard(load_data_func, data_file):
 
     st.markdown("---")
 
-    # ===========================
-    # 3️⃣ Position Distribution
-    # ===========================
+    # --- Finishing Position Distribution ---
     st.subheader("⚙️ Finishing Position Distribution")
-    st.markdown("**Check consistency and spread of finishing positions among top teams.**")
+    st.markdown("Check consistency and spread of finishing positions among top teams.")
 
     if not df_filtered.empty:
         fig3, ax3 = plt.subplots(figsize=(12, 6))
@@ -110,8 +107,8 @@ def run_team_analysis_dashboard(load_data_func, data_file):
             warnings.simplefilter("ignore")
             sns.boxplot(
                 data=df_filtered,
-                x='TeamName',
-                y='Position',
+                x='teamname',
+                y='position',
                 palette="crest",
                 ax=ax3
             )
@@ -127,11 +124,9 @@ def run_team_analysis_dashboard(load_data_func, data_file):
 
     st.markdown("---")
 
-    # ===========================
-    # 4️⃣ Correlation Heatmap
-    # ===========================
+    # --- Feature Correlation ---
     st.subheader("📊 Feature Correlation (Performance Indicators)")
-    st.markdown("**See how numerical features correlate with each other for the selected teams and season.**")
+    st.markdown("See how numerical features correlate with each other for the selected teams and season.")
 
     numeric_cols = df_filtered.select_dtypes(include=["float64", "int64"]).columns
     if len(numeric_cols) > 1:
@@ -144,4 +139,13 @@ def run_team_analysis_dashboard(load_data_func, data_file):
     else:
         st.info("No numerical data available for correlation analysis.")
 
-    st.success("✅ Dashboard Loaded Successfully!")
+    # --- Summary Table ---
+    st.subheader("🏁 Summary Metrics")
+    summary_table = pd.DataFrame({
+        "Team": team_wins.index if not team_wins.empty else [],
+        "Wins": team_wins.values if not team_wins.empty else [],
+        "Avg Points": team_points.values if not team_points.empty else []
+    })
+    st.table(summary_table)
+
+    st.success("✅ Team Analysis Dashboard Loaded Successfully!")
