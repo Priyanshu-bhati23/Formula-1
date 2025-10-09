@@ -30,8 +30,8 @@ def run_prediction(cache_path="cache_bahrain"):
     st.write("### ⚙️ Loading Data and Model Training")
     
     # -------------------------------------------------
-    # ⚙️ Handle FastF1 caching for deployment environments
-    # FastF1 cache will be stored in a relative path, which is usually persistent on Streamlit Cloud.
+    # ⚙️ Handle FastF1 caching 
+    # This creates a folder named 'cache_bahrain' for persistent data storage.
     fastf1.Cache.enable_cache(cache_path)
     print(f"✅ Using FastF1 cache path: {cache_path}")
 
@@ -39,7 +39,7 @@ def run_prediction(cache_path="cache_bahrain"):
     # 🏎️ Load historical Bahrain GP data (Round 1)
     data_years = []
     
-    # Historical Bahrain GPs (Round 1)
+    # Historical Bahrain GPs (Round 1 for 2022, 2023, 2024)
     for yr, rnd in [(2022, 1), (2023, 1), (2024, 1)]:
         try:
             qual = fastf1.get_session(yr, rnd, "Q")
@@ -64,13 +64,13 @@ def run_prediction(cache_path="cache_bahrain"):
             print(f"Error loading {yr} Bahrain GP: {e}")
 
     if not data_years:
-        st.error("❌ No historical data found.")
+        # Return None on failure
         return None
 
     historical = pd.concat(data_years, ignore_index=True).copy()
 
     # -------------------------------------------------
-    # 🧠 Static data & Feature Mapping (Use the same definitions)
+    # 🧠 Static data & Feature Mapping
     clean_air_race_pace = {
         "VER": 93.191067, "HAM": 94.020622, "LEC": 93.418667, "NOR": 93.428600, "ALO": 94.784333,
         "PIA": 93.232111, "RUS": 93.833378, "SAI": 94.497444, "STR": 95.318250, "HUL": 95.345455,
@@ -163,7 +163,7 @@ def run_prediction(cache_path="cache_bahrain"):
     qual_2025["PredictedPosition"] = model.predict(X_pred)
     qual_2025.sort_values("PredictedPosition", inplace=True)
     
-    # Return results and model for display outside the cached function
+    # Return results, model, and features as a tuple
     return qual_2025[["Driver", "PredictedPosition"]], model, features
 
 
@@ -176,9 +176,11 @@ def main():
     # Run the prediction function (it will use the cache if possible)
     results_and_model = run_prediction()
     
+    # 🚨 FIX: Check if the function returned None (error)
     if results_and_model is None:
         return
 
+    # 🚨 FIX: Unpack the tuple correctly
     qual_2025, model, features = results_and_model
 
     # -------------------------------------------------
