@@ -8,16 +8,15 @@ import fastf1
 # --- Attempt robust dynamic import for analysis pages ---
 # Import analysis pages directly from 'pages' subdirectory.
 try:
-    # Attempt to import all pages as they were in the user's snippet
+    # Attempt to import all pages
     import pages.team_analysis_page as team_analysis_page 
-    import pages.driver_vs_teammate as driver_vs_teammate
+    # Removed: import pages.driver_vs_teammate as driver_vs_teammate
     import pages.driver_analysis_page as driver_analysis_page
     import pages.season_analysis_page as season_analysis_page
     analysis_pages_loaded = True
 except ImportError:
     st.error("🚨 Module Error: Could not import analysis pages from the 'pages' directory. Ensure the folder exists and files are present.")
     team_analysis_page = None
-    driver_vs_teammate = None
     driver_analysis_page = None
     season_analysis_page = None
     analysis_pages_loaded = False
@@ -45,7 +44,7 @@ page = st.sidebar.radio("Go to", [
     "Race Prediction", 
     "Team Analysis",
     "Driver Analysis",
-    "Driver vs Teammate",
+    # REMOVED: "Driver vs Teammate",
     "Season Analysis"
 ])
 st.markdown("---")
@@ -215,15 +214,7 @@ elif page == "Driver Analysis":
     else:
         st.error("Driver Analysis page module failed to load.")
 
-elif page == "Driver vs Teammate":
-    if driver_vs_teammate and analysis_pages_loaded:
-        try:
-            driver_vs_teammate.run_comparison_dashboard(load_data, DATA_FILE)
-        except TypeError as e:
-            st.error(f"🚨 TypeError in Driver vs Teammate dispatch: Check the function signature. Original Error: {e}")
-            st.exception(e)
-    else:
-        st.error("Driver vs Teammate page module failed to load.")
+# REMOVED: elif page == "Driver vs Teammate": block was here.
 
 elif page == "Season Analysis":
     if season_analysis_page and analysis_pages_loaded:
