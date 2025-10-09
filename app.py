@@ -79,11 +79,11 @@ if page == "Race Prediction":
     st.sidebar.header("Select Grand Prix")
     
     try:
-        # List files in the subdirectory
+        # List files in the subdirectory AND filter out 'bahrain'
         available_races = [
             f.replace("_gp.py", "")
             for f in os.listdir("Predictions")
-            if f.endswith("_gp.py")
+            if f.endswith("_gp.py") and f.replace("_gp.py", "") != 'bahrain'
         ]
     except FileNotFoundError:
         available_races = []
