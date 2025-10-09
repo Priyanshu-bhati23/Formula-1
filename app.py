@@ -1,131 +1,157 @@
-# team_analysis_page.py
-
 import streamlit as st
-import pandas as pd
+import importlib
+import os
 import matplotlib.pyplot as plt
-import seaborn as sns
-import warnings
+import pandas as pd # <-- CORRECTED: Pandas import added
+import pages.team_analysis_page as team_analysis_page 
+import pages.driver_vs_teammate as driver_vs_teammate
+import pages.driver_analysis_page as driver_analysis_page
+import pages.season_analysis_page as season_analysis_page
+import fastf1
 
-def run_team_analysis_dashboard(load_data_func, data_file):
-    """
-    Displays the Team Performance Dashboard.
-    """
-    st.title("🏎️ Team Performance Dashboard")
+# Enable FastF1 cache for Streamlit Cloud
+cache_dir = "/tmp/fastf1_cache"  # writable folder on 
+os.makedirs(cache_dir, exist_ok=True)
+fastf1.Cache.enable_cache(cache_dir)
+
+# -------------------------------
+# Streamlit Page Configuration
+# -------------------------------
+st.set_page_config(
+    page_title="🏎️ Formula 1 Race Predictor",
+    page_icon="🏁",
+    layout="wide",
+)
+
+# -------------------------------
+# Sidebar Navigation
+# -------------------------------
+st.sidebar.header("Navigation")
+page = st.sidebar.radio("Go to", [
+    "Race Prediction", 
+    "Team Analysis",
+    "Driver Analysis",
+    "Driver vs Teammate",
+    "Season Analysis"
+])
+st.markdown("---")
+
+# --- DATA FILE CONFIGURATION (Used by all analysis pages) ---
+DATA_FILE = "f1_feature_engineered.csv" 
+
+# --- HELPER FUNCTION FOR DATA LOADING ---
+@st.cache_data
+def load_data(file_path):
+    """Loads and caches the feature-engineered DataFrame."""
+    if not os.path.exists(file_path):
+        # Raise an error that the calling function can catch
+        raise FileNotFoundError(f"Data file not found at: {file_path}")
+    return pd.read_csv(file_path)
+
+# -------------------------------
+# Main Content Dispatch Logic
+# -------------------------------
+if page == "Race Prediction":
+    st.title("🏎️ Formula 1 Race Predictor Dashboard")
     st.markdown("---")
-    st.markdown("Explore F1 team stats, trends, and performance consistency from 2018–2024.")
 
-    # --- Load Data ---
+    # -------------------------------
+    # Race Selection (Inside Prediction Page)
+    # -------------------------------
+    st.sidebar.header("Select Grand Prix")
+    
     try:
-        df = load_data_func(data_file)
-    except Exception as e:
-        st.error(f"❌ Failed to load data: {e}")
-        return
+        available_races = [
+            f.replace("_gp.py", "")
+            for f in os.listdir("Predictions")
+            if f.endswith("_gp.py")
+        ]
+    except FileNotFoundError:
+        available_races = []
 
-    # Normalize column names
-    df.columns = df.columns.str.strip().str.lower()
-
-    # --- Sidebar Filters ---
-    st.sidebar.header("🔍 Filters")
-    all_seasons = sorted(df['season'].unique())
-    selected_season = st.sidebar.selectbox(
-        "Select Season:",
-        options=all_seasons,
-        index=len(all_seasons)-1
-    )
-
-    all_teams = sorted(df['teamname'].unique())
-    selected_teams = st.sidebar.multiselect(
-        "Select Teams to Compare:",
-        options=all_teams,
-        default=all_teams[:5]
-    )
-
-    # Filter dataframe
-    df_filtered = df[(df['season'] == selected_season) & (df['teamname'].isin(selected_teams))]
-
-    if df_filtered.empty:
-        st.info("No data available for this selection.")
-        return
-
-    # ===========================
-    # 1️⃣ Team Wins Distribution
-    # ===========================
-    st.subheader("🏆 Team Wins Distribution")
-    st.markdown("Visualize how wins are distributed among selected teams.")
-
-    team_wins = df_filtered.groupby("teamname")["winner"].sum().sort_values(ascending=False)
-    if not team_wins.empty:
-        fig1, ax1 = plt.subplots(figsize=(7, 7))
-        ax1.pie(team_wins, labels=team_wins.index, autopct='%1.1f%%', startangle=120,
-                colors=sns.color_palette("Set2", len(team_wins)))
-        ax1.set_title(f"Team Wins in {selected_season}", fontsize=14, weight='bold')
-        st.pyplot(fig1)
-        plt.close(fig1)
+    if not available_races:
+        st.error("No race scripts found in the `Predictions/` folder. Please create it and add scripts.")
+        run_button = False
+        race_name = None
     else:
-        st.info("No win data available for this filter.")
+        race_name = st.sidebar.selectbox("Choose a race:", available_races)
+        run_button = st.sidebar.button("🚀 Run Prediction")
 
-    st.markdown("---")
+    # -------------------------------
+    # Run Prediction Logic
+    # -------------------------------
+    if run_button and race_name:
+        st.info(f"Running prediction for **{race_name.capitalize()} Grand Prix**...")
 
-    # ===========================
-    # 2️⃣ Average Points per Team
-    # ===========================
-    st.subheader("⭐ Average Points per Race")
-    st.markdown("Compare the average points per race across selected teams.")
+        module_path = f"Predictions.{race_name}_gp"
+        expected_file = os.path.join("Predictions", f"{race_name}_gp.py")
+        cache_path = os.path.join("Predictions", f"cache_{race_name}")
 
-    team_points = df_filtered.groupby("teamname")["points"].mean().sort_values(ascending=False)
-    if not team_points.empty:
-        fig2, ax2 = plt.subplots(figsize=(10, 6))
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            sns.barplot(x=team_points.values, y=team_points.index, palette="Blues_r", ax=ax2)
-        ax2.set_xlabel("Avg Points per Race")
-        ax2.set_ylabel("Team")
-        ax2.grid(axis='x', linestyle='--', alpha=0.3)
-        st.pyplot(fig2)
-        plt.close(fig2)
+        if not os.path.exists(expected_file):
+            st.error(f"❌ `{expected_file}` not found.")
+            st.stop()
+
+        os.makedirs(cache_path, exist_ok=True)
+
+        try:
+            race_module = importlib.import_module(module_path)
+
+            if hasattr(race_module, "run_prediction"):
+                with st.spinner(f"Predicting {race_name.capitalize()} GP results..."):
+                    try:
+                        result = race_module.run_prediction(cache_path)
+                    except TypeError:
+                        result = race_module.run_prediction()
+
+                st.success("✅ Prediction completed successfully!")
+
+                if result is not None and not result.empty:
+                    st.subheader("🏁 Predicted Race Results")
+                    st.dataframe(result, use_container_width=True)
+
+                    st.markdown("### 🏆 Predicted Podium")
+                    podium_size = min(3, len(result)) 
+                    if podium_size > 0:
+                        podium = result.sort_values("PredictedPosition").head(podium_size)
+                        cols = st.columns(podium_size)
+                        medals = ["🥇", "🥈", "🥉"]
+                        for i, col in enumerate(cols):
+                            with col:
+                                st.metric(label=f"{medals[i]} {podium.iloc[i]['Driver']}",
+                                          value=f"P{i+1}")
+                    
+                    st.subheader("📊 Model Feature Importance")
+                    try:
+                        if hasattr(race_module, "plt"):
+                             st.pyplot(race_module.plt.gcf())
+                        else:
+                             st.info("Feature importance plot not available or was not captured.")
+                    except Exception as e:
+                        st.warning(f"Could not render plot: {e}")
+
+                else:
+                    st.info("ℹ️ No prediction results returned — check the race script.")
+            else:
+                st.warning(f"No `run_prediction()` function found in `{race_name}_gp.py`")
+
+        except Exception as e:
+            st.error(f"🚨 Error while running  ")
+            st.exception(e)
+            st.info("Tip: This might happen if FastF1 cannot fetch or cache data for this race.")
+            
+    elif not available_races:
+        pass 
     else:
-        st.info("No average points data available for this filter.")
+        st.info("👈 Select a Grand Prix from the sidebar and click **Run Prediction** to start.")
 
-    st.markdown("---")
+elif page == "Driver Analysis":
+    driver_analysis_page.run_driver_analysis_dashboard(load_data, DATA_FILE) 
 
-    # ===========================
-    # 3️⃣ Finishing Position Distribution
-    # ===========================
-    st.subheader("⚙️ Finishing Position Distribution")
-    st.markdown("Check consistency and spread of finishing positions among selected teams.")
+elif page == "Driver vs Teammate":
+    driver_vs_teammate.run_comparison_dashboard(load_data, DATA_FILE)
 
-    if not df_filtered.empty:
-        fig3, ax3 = plt.subplots(figsize=(12, 6))
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            sns.boxplot(data=df_filtered, x='teamname', y='position', palette="crest", ax=ax3)
-        ax3.set_title(f"Finishing Positions ({selected_season})", fontsize=14, weight='bold')
-        ax3.set_xlabel("Team")
-        ax3.set_ylabel("Finishing Position (Lower = Better)")
-        plt.xticks(rotation=45)
-        ax3.grid(axis='y', linestyle='--', alpha=0.4)
-        st.pyplot(fig3)
-        plt.close(fig3)
-    else:
-        st.info("No data available to generate the box plot.")
+elif page == "Season Analysis":
+    season_analysis_page.run_season_analysis_dashboard(load_data, DATA_FILE)
 
-    st.markdown("---")
-
-    # ===========================
-    # 4️⃣ Correlation Heatmap
-    # ===========================
-    st.subheader("📊 Feature Correlation (Performance Indicators)")
-    st.markdown("See how numerical features correlate with each other for selected teams.")
-
-    numeric_cols = df_filtered.select_dtypes(include=["float64", "int64"]).columns
-    if len(numeric_cols) > 1:
-        corr = df_filtered[numeric_cols].corr()
-        fig4, ax4 = plt.subplots(figsize=(10, 6))
-        sns.heatmap(corr, cmap="coolwarm", annot=False, linewidths=0.5, ax=ax4)
-        ax4.set_title("Feature Correlation Heatmap", fontsize=13, weight='bold')
-        st.pyplot(fig4)
-        plt.close(fig4)
-    else:
-        st.info("Not enough numerical data available for correlation analysis.")
-
-    st.success("✅ Team Analysis Dashboard Loaded Successfully!")
+elif page == "Team Analysis":
+    team_analysis_page.run_team_analysis_dashboard(load_data, DATA_FILE)
