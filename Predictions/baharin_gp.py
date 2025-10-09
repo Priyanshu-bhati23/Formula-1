@@ -12,18 +12,37 @@ from dotenv import load_dotenv
 import streamlit as st
 import warnings
 
-# Suppress pandas and fastf1 warnings for clean Streamlit output
+# Suppress pandas and fastf1 warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # --- CONFIG ---
 QUALI_WEIGHT = 2.0
-BAHRAIN_WEATHER_COORD = "26.0325,50.5106" # Sakhir, Bahrain coordinates
+BAHRAIN_WEATHER_COORD = "26.0325,50.5106" 
 
 # Set Streamlit page configuration
 st.set_page_config(layout="centered", page_title="F1 Bahrain Prediction")
 
-# --- Model & Data Logic (Cached) ---
+# Define static features outside the cached function for clarity
+# (assuming these are constant across predictions, as per your previous code)
+clean_air_race_pace = {
+    "VER": 93.191067, "HAM": 94.020622, "LEC": 93.418667, "NOR": 93.428600, "ALO": 94.784333,
+    "PIA": 93.232111, "RUS": 93.833378, "SAI": 94.497444, "STR": 95.318250, "HUL": 95.345455,
+    "OCO": 95.682128
+}
+team_points = {
+    "McLaren": 279, "Mercedes": 147, "Red Bull": 131, "Williams": 51, "Ferrari": 114,
+    "Haas": 20, "Aston Martin": 14, "Kick Sauber": 6, "Racing Bulls": 10, "Alpine": 7
+}
+max_points = max(team_points.values())
+team_perf = {t: pts / max_points for t, pts in team_points.items()}
+driver_team = {
+    "VER": "Red Bull", "NOR": "McLaren", "PIA": "McLaren", "LEC": "Ferrari", "RUS": "Mercedes",
+    "HAM": "Mercedes", "GAS": "Alpine", "ALO": "Aston Martin", "TSU": "Racing Bulls",
+    "SAI": "Ferrari", "HUL": "Kick Sauber", "OCO": "Alpine", "STR": "Aston Martin"
+}
+features = ["QualifyingTime (s)", "TeamPerformanceScore", "CleanAirRacePace (s)", "RainProbability", "Temperature"]
+
 
 @st.cache_data(show_spinner="Loading F1 data and training model for Bahrain...", ttl=60*60*4)
 def run_prediction(cache_path="cache_bahrain"):
@@ -31,7 +50,6 @@ def run_prediction(cache_path="cache_bahrain"):
     
     # -------------------------------------------------
     # ⚙️ Handle FastF1 caching 
-    # This creates a folder named 'cache_bahrain' for persistent data storage.
     fastf1.Cache.enable_cache(cache_path)
     print(f"✅ Using FastF1 cache path: {cache_path}")
 
@@ -39,7 +57,6 @@ def run_prediction(cache_path="cache_bahrain"):
     # 🏎️ Load historical Bahrain GP data (Round 1)
     data_years = []
     
-    # Historical Bahrain GPs (Round 1 for 2022, 2023, 2024)
     for yr, rnd in [(2022, 1), (2023, 1), (2024, 1)]:
         try:
             qual = fastf1.get_session(yr, rnd, "Q")
@@ -64,30 +81,15 @@ def run_prediction(cache_path="cache_bahrain"):
             print(f"Error loading {yr} Bahrain GP: {e}")
 
     if not data_years:
-        # Return None on failure
-        return None
+        # 🚨 FIX for structural error: Return an empty DataFrame, not None
+        # This prevents the outer app from failing the '.empty' check on a 'tuple'
+        st.error("❌ No historical data found. Cannot train model.")
+        return pd.DataFrame(), None, None # Return empty DataFrame, None model, None features
 
     historical = pd.concat(data_years, ignore_index=True).copy()
 
     # -------------------------------------------------
-    # 🧠 Static data & Feature Mapping
-    clean_air_race_pace = {
-        "VER": 93.191067, "HAM": 94.020622, "LEC": 93.418667, "NOR": 93.428600, "ALO": 94.784333,
-        "PIA": 93.232111, "RUS": 93.833378, "SAI": 94.497444, "STR": 95.318250, "HUL": 95.345455,
-        "OCO": 95.682128
-    }
-    team_points = {
-        "McLaren": 279, "Mercedes": 147, "Red Bull": 131, "Williams": 51, "Ferrari": 114,
-        "Haas": 20, "Aston Martin": 14, "Kick Sauber": 6, "Racing Bulls": 10, "Alpine": 7
-    }
-    max_points = max(team_points.values())
-    team_perf = {t: pts / max_points for t, pts in team_points.items()}
-    driver_team = {
-        "VER": "Red Bull", "NOR": "McLaren", "PIA": "McLaren", "LEC": "Ferrari", "RUS": "Mercedes",
-        "HAM": "Mercedes", "GAS": "Alpine", "ALO": "Aston Martin", "TSU": "Racing Bulls",
-        "SAI": "Ferrari", "HUL": "Kick Sauber", "OCO": "Alpine", "STR": "Aston Martin"
-    }
-
+    # 🧠 Feature Mapping
     historical["Team"] = historical["Driver"].map(driver_team)
     historical["CleanAirRacePace (s)"] = historical["Driver"].map(clean_air_race_pace)
     historical["TeamPerformanceScore"] = historical["Team"].map(team_perf)
@@ -95,9 +97,10 @@ def run_prediction(cache_path="cache_bahrain"):
 
     # -------------------------------------------------
     # 🌦️ Weather API Call (Bahrain)
+    # ... (Weather API logic as before) ...
     load_dotenv()
     API_KEY = os.getenv("WeatherAPI", "")
-    rain_probability, temperature = 0, 22 # Default if API fails
+    rain_probability, temperature = 0, 22 
 
     if API_KEY:
         params = {"key": API_KEY, "q": BAHRAIN_WEATHER_COORD, "days": 1, "aqi": "no", "alerts": "no"}
@@ -118,7 +121,6 @@ def run_prediction(cache_path="cache_bahrain"):
 
     # -------------------------------------------------
     # 🧮 Train Model
-    features = ["QualifyingTime (s)", "TeamPerformanceScore", "CleanAirRacePace (s)", "RainProbability", "Temperature"]
     X = historical[features].copy()
     X["QualifyingTime (s)"] *= QUALI_WEIGHT
     y = historical["RacePosition"]
@@ -133,6 +135,7 @@ def run_prediction(cache_path="cache_bahrain"):
 
     # -------------------------------------------------
     # 🔮 Predict 2025 Bahrain GP (Hardcoded Qualifying Results)
+    # ... (Prediction input data as before) ...
     qual_2025 = pd.DataFrame({
         "Driver": [
             "VER", "NOR", "PIA", "LEC", "RUS", "HAM", "SAI", "ALO", "GAS", "OCO",
@@ -150,16 +153,13 @@ def run_prediction(cache_path="cache_bahrain"):
     qual_2025["RainProbability"] = rain_probability
     qual_2025["Temperature"] = temperature
 
-    # Impute missing static data with median from the historical training set
     for feature in ["TeamPerformanceScore", "CleanAirRacePace (s)"]:
         qual_2025[feature].fillna(historical[feature].median(), inplace=True)
         
-    # Prepare features for prediction
     X_pred = qual_2025[features].copy()
     X_pred["QualifyingTime (s)"] *= QUALI_WEIGHT
     X_pred = imputer.transform(X_pred)
 
-    # Predict and sort
     qual_2025["PredictedPosition"] = model.predict(X_pred)
     qual_2025.sort_values("PredictedPosition", inplace=True)
     
@@ -173,14 +173,17 @@ def main():
     st.title("Formula 1 🇧🇭 Bahrain GP Race Prediction")
     st.markdown("---")
     
-    # Run the prediction function (it will use the cache if possible)
+    # Run the prediction function 
     results_and_model = run_prediction()
     
-    # 🚨 FIX: Check if the function returned None (error)
-    if results_and_model is None:
+    # 🚨 FIX: Correctly check for success (results_and_model is a tuple)
+    # and unpack the result.
+    if results_and_model[0] is None or results_and_model[0].empty:
+        # This catches both the 'None' model/features and the empty DataFrame returned on failure.
+        st.error("Prediction failed: Could not load required historical data or train model.")
         return
 
-    # 🚨 FIX: Unpack the tuple correctly
+    # UNPACK the tuple correctly
     qual_2025, model, features = results_and_model
 
     # -------------------------------------------------
