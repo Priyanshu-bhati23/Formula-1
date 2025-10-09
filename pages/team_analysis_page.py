@@ -1,28 +1,15 @@
+# team_analysis_page.py
+
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
 import warnings
 
-# --- CONFIG ---
-DATA_FILE = "f1_feature_engineered.csv"
-
-# Streamlit Page Setup
-st.set_page_config(page_title="🏎️ Team Performance Dashboard", page_icon="🏁", layout="wide")
-
-# --- Helper Function ---
-def load_data(file_path):
-    """Load CSV data from the given file path."""
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Data file not found at: {file_path}")
-    return pd.read_csv(file_path)
-
-# --- MAIN FUNCTION ---
 def run_team_analysis_dashboard(load_data_func, data_file):
     """
-    Run the Team Analysis Dashboard.
-    
+    Multi-page Streamlit Team Analysis Dashboard.
+
     Args:
         load_data_func: Function to load dataset (e.g., load_data)
         data_file: Path to the CSV dataset
@@ -158,7 +145,3 @@ def run_team_analysis_dashboard(load_data_func, data_file):
         st.info("No numerical data available for correlation analysis.")
 
     st.success("✅ Dashboard Loaded Successfully!")
-
-# --- Run the Dashboard ---
-if __name__ == "__main__":
-    run_team_analysis_dashboard(load_data, DATA_FILE)
