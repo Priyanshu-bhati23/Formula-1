@@ -197,24 +197,40 @@ if page == "Race Prediction":
 # Enhanced check to ensure modules loaded successfully
 elif page == "Team Analysis":
     if team_analysis_page and analysis_pages_loaded:
-        team_analysis_page.run_team_analysis_dashboard(load_data, DATA_FILE)
+        try:
+            team_analysis_page.run_team_analysis_dashboard(load_data, DATA_FILE)
+        except TypeError as e:
+            st.error(f"🚨 TypeError in Team Analysis dispatch: Check if 'run_team_analysis_dashboard' function signature in 'pages/team_analysis_page.py' matches expected arguments: (load_data_func, data_file). Original Error: {e}")
+            st.exception(e)
     else:
         st.error("Team Analysis page module failed to load. See error logs above.")
         
 elif page == "Driver Analysis":
     if driver_analysis_page and analysis_pages_loaded:
-        driver_analysis_page.run_driver_analysis_dashboard(load_data, DATA_FILE)
+        try:
+            driver_analysis_page.run_driver_analysis_dashboard(load_data, DATA_FILE)
+        except TypeError as e:
+            st.error(f"🚨 TypeError in Driver Analysis dispatch: Check the function signature. Original Error: {e}")
+            st.exception(e)
     else:
         st.error("Driver Analysis page module failed to load.")
 
 elif page == "Driver vs Teammate":
     if driver_vs_teammate and analysis_pages_loaded:
-        driver_vs_teammate.run_comparison_dashboard(load_data, DATA_FILE)
+        try:
+            driver_vs_teammate.run_comparison_dashboard(load_data, DATA_FILE)
+        except TypeError as e:
+            st.error(f"🚨 TypeError in Driver vs Teammate dispatch: Check the function signature. Original Error: {e}")
+            st.exception(e)
     else:
         st.error("Driver vs Teammate page module failed to load.")
 
 elif page == "Season Analysis":
     if season_analysis_page and analysis_pages_loaded:
-        season_analysis_page.run_season_analysis_dashboard(load_data, DATA_FILE)
+        try:
+            season_analysis_page.run_season_analysis_dashboard(load_data, DATA_FILE)
+        except TypeError as e:
+            st.error(f"🚨 TypeError in Season Analysis dispatch: Check the function signature. Original Error: {e}")
+            st.exception(e)
     else:
         st.error("Season Analysis page module failed to load.")
