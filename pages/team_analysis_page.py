@@ -13,27 +13,23 @@ st.set_page_config(page_title="🏎️ Team Performance Dashboard", page_icon="�
 
 # --- Helper Function ---
 def load_data(file_path):
+    """Load CSV data from the given file path."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Data file not found at: {file_path}")
     return pd.read_csv(file_path)
 
 # --- MAIN FUNCTION ---
-def run_team_analysis_dashboard(load_data_func=None, data_file=None):
+def run_team_analysis_dashboard(load_data_func, data_file):
     """
-    Runs the Team Analysis Dashboard.
-    Optional arguments:
-        load_data_func: function to load the dataset (default: load_data)
-        data_file: path to the CSV dataset (default: DATA_FILE)
+    Run the Team Analysis Dashboard.
+    
+    Args:
+        load_data_func: Function to load dataset (e.g., load_data)
+        data_file: Path to the CSV dataset
     """
     st.title("🏎️ Formula 1 Team Performance Dashboard")
     st.caption("Explore F1 team stats, trends, and performance consistency from 2018–2024")
     st.markdown("---")
-
-    # --- Use defaults if arguments not provided ---
-    if load_data_func is None:
-        load_data_func = load_data
-    if data_file is None:
-        data_file = DATA_FILE
 
     # --- LOAD DATA ---
     try:
