@@ -18,14 +18,26 @@ def load_data(file_path):
     return pd.read_csv(file_path)
 
 # --- MAIN FUNCTION ---
-def run_team_analysis_dashboard():
+def run_team_analysis_dashboard(load_data_func=None, data_file=None):
+    """
+    Runs the Team Analysis Dashboard.
+    Optional arguments:
+        load_data_func: function to load the dataset (default: load_data)
+        data_file: path to the CSV dataset (default: DATA_FILE)
+    """
     st.title("🏎️ Formula 1 Team Performance Dashboard")
     st.caption("Explore F1 team stats, trends, and performance consistency from 2018–2024")
     st.markdown("---")
 
+    # --- Use defaults if arguments not provided ---
+    if load_data_func is None:
+        load_data_func = load_data
+    if data_file is None:
+        data_file = DATA_FILE
+
     # --- LOAD DATA ---
     try:
-        df = load_data(DATA_FILE)
+        df = load_data_func(data_file)
     except FileNotFoundError as e:
         st.error(f"🚨 {e}. Please ensure the dataset is in your project root.")
         return
@@ -151,7 +163,6 @@ def run_team_analysis_dashboard():
 
     st.success("✅ Dashboard Loaded Successfully!")
 
-
 # --- Run the Dashboard ---
 if __name__ == "__main__":
-    run_team_analysis_dashboard()
+    run_team_analysis_dashboard(load_data, DATA_FILE)
