@@ -13,10 +13,11 @@ def run_comparison_dashboard(load_data_func, data_file):
     st.title("🤝 Driver vs. Teammate Performance")
     st.markdown("---")
     st.markdown(
-        "This analysis compares the performance of current F1 drivers "
-        "against their most recent teammates, providing context for their race results."
+        "Compare the performance of F1 drivers against their most recent teammates. "
+        "Positive values indicate the driver finishes better than their teammate on average."
     )
 
+    # --- Load Data ---
     try:
         df = load_data_func(data_file)
     except Exception as e:
@@ -26,40 +27,42 @@ def run_comparison_dashboard(load_data_func, data_file):
     # --- Normalize column names ---
     df.columns = df.columns.str.strip().str.lower()
 
-    required_columns = ['driver', 'teamname', 'fullname', 'position']
+    # --- Check required columns ---
+    required_columns = ['broadcastname', 'teamname', 'fullname', 'position', 'season']
     missing_cols = [col for col in required_columns if col not in df.columns]
     if missing_cols:
-        st.error(f"Missing required columns in dataset: {missing_cols}")
+        st.error(f"Missing required columns: {missing_cols}")
         return
 
-    # --- Sidebar Filters ---
-    st.sidebar.header("🔍 Filters")
-    all_seasons = sorted(df['season'].unique()) if 'season' in df.columns else []
+    # --- Sidebar: Season filter ---
+    all_seasons = sorted(df['season'].unique())
     selected_season = st.sidebar.selectbox(
         "Select Season:",
         options=all_seasons,
-        index=len(all_seasons) - 1 if all_seasons else 0
+        index=len(all_seasons)-1
     )
+    df_filtered = df[df['season'] == selected_season]
 
-    # Filter by season if season column exists
-    if 'season' in df.columns:
-        df_filtered = df[df['season'] == selected_season]
-    else:
-        df_filtered = df.copy()
+    if df_filtered.empty:
+        st.warning("No data available for this season.")
+        return
 
     # --- Map drivers to their most common teammate ---
+    def safe_mode(series):
+        return series.mode().iloc[0] if not series.mode().empty else None
+
     teammate_mapping = (
-        df_filtered.groupby(['driver', 'teamname'])['fullname']
-        .agg(lambda x: x.mode()[0] if not x.empty else None)
+        df_filtered.groupby(['broadcastname', 'teamname'])['fullname']
+        .agg(safe_mode)
         .reset_index()
     )
-    teammate_mapping.rename(columns={'fullname': 'teammate'}, inplace=True)
+    teammate_mapping.rename(columns={'fullname': 'teammate', 'broadcastname': 'driver'}, inplace=True)
     teammate_mapping.drop(columns='teamname', inplace=True)
 
-    # Merge teammate info
+    # Merge teammate info back
     df_merged = pd.merge(df_filtered, teammate_mapping, on='driver', how='left', suffixes=('', '_teammate'))
 
-    # Calculate average positions
+    # --- Calculate average positions ---
     avg_position = (
         df_merged.groupby(['driver', 'teammate'])['position']
         .mean()
@@ -92,12 +95,9 @@ def run_comparison_dashboard(load_data_func, data_file):
         ax.grid(axis='x', linestyle='--', alpha=0.6)
         st.pyplot(fig)
         plt.close(fig)
-
         st.caption(
-            "*Note: A positive value indicates the driver consistently finishes "
-            "in a better position than their teammate's average position.*"
+            "*Positive values indicate the driver consistently finishes ahead of their teammate.*"
         )
-
     else:
         st.info("Insufficient data to perform Driver vs Teammate comparison.")
 
