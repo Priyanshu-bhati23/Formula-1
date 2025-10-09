@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
 
-# The function signature is corrected here to accept two positional arguments:
+# --- THE CRITICAL FIX ---
+# This function signature must accept (load_data_func, data_file)
 def run_team_analysis_dashboard(load_data_func, data_file):
     """
     Displays the Team Performance Dashboard.
